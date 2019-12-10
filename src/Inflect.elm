@@ -1,4 +1,4 @@
-module Inflect exposing (camelize, pascalize, pluralize, singularize)
+module Inflect exposing (pluralize, singularize, camelize, pascalize)
 
 {-| `elm-inflect` lets you convert a String to its plural, singular, camelCase,
 and PascalCase forms.
@@ -19,9 +19,14 @@ replace : String -> (Regex.Match -> String) -> Replacer
 replace regex_ replacer =
     let
         regex =
-            regex_ |> Regex.regex |> Regex.caseInsensitive
+            regex_
+                |> Regex.fromStringWith
+                    { caseInsensitive = True
+                    , multiline = False
+                    }
+                |> Maybe.withDefault Regex.never
     in
-    ( regex, Regex.replace Regex.All regex replacer )
+    ( regex, Regex.replace regex replacer )
 
 
 replace0 : String -> String -> Replacer
@@ -72,6 +77,7 @@ irregulars isPlurals =
                             replacement =
                                 if isPlurals then
                                     pTail
+
                                 else
                                     sTail
                         in
@@ -167,6 +173,7 @@ apply replacers string =
         ( regex, replacer ) :: tail ->
             if Regex.contains regex string then
                 replacer string
+
             else
                 apply tail string
 
@@ -174,34 +181,18 @@ apply replacers string =
             string
 
 
-{-| Convert a String to its plural form.
+{-| Convert a String to camelCase.
 
-    pluralize "foo" == "foos"
-    pluralize "axis" == "axes"
-    pluralize "bus" == "buses"
+    camelize "foo bar" == "fooBar"
 
--}
-pluralize : String -> String
-pluralize string =
-    if List.member (String.toLower string) uncountables then
-        string
-    else
-        apply plurals string
+    camelize "foo-bar" == "fooBar"
 
-
-{-| Convert a String to its singular form.
-
-    singularize "foos" == "foo"
-    singularize "axes" == "axis"
-    singularize "buses" == "bus"
+    camelize "foo-_bar" == "fooBar"
 
 -}
-singularize : String -> String
-singularize string =
-    if List.member (String.toLower string) uncountables then
-        string
-    else
-        apply singulars string
+camelize : String -> String
+camelize =
+    pascalize >> mapFirst Char.toLower
 
 
 mapFirst : (Char -> Char) -> String -> String
@@ -214,27 +205,58 @@ mapFirst f string =
             string
 
 
-{-| Convert a String to camelCase.
-
-    camelize "foo bar" == "fooBar"
-    camelize "foo-bar" == "fooBar"
-    camelize "foo-_bar" == "fooBar"
-
--}
-camelize : String -> String
-camelize =
-    pascalize >> mapFirst Char.toLower
+parse : String -> Regex
+parse =
+    Regex.fromString >> Maybe.withDefault Regex.never
 
 
 {-| Convert a String to PascalCase
 
     pascalize "foo bar" == "FooBar"
+
     pascalize "foo-bar" == "FooBar"
+
     pascalize "foo-_bar" == "FooBar"
 
 -}
 pascalize : String -> String
 pascalize =
-    Regex.find Regex.All (Regex.regex "[a-zA-Z]+|[0-9]+")
+    Regex.find (parse "[a-zA-Z]+|[0-9]+")
         >> List.map (.match >> String.toLower >> mapFirst Char.toUpper)
         >> String.join ""
+
+
+{-| Convert a String to its plural form.
+
+    pluralize "foo" == "foos"
+
+    pluralize "axis" == "axes"
+
+    pluralize "bus" == "buses"
+
+-}
+pluralize : String -> String
+pluralize string =
+    if List.member (String.toLower string) uncountables then
+        string
+
+    else
+        apply plurals string
+
+
+{-| Convert a String to its singular form.
+
+    singularize "foos" == "foo"
+
+    singularize "axes" == "axis"
+
+    singularize "buses" == "bus"
+
+-}
+singularize : String -> String
+singularize string =
+    if List.member (String.toLower string) uncountables then
+        string
+
+    else
+        apply singulars string
